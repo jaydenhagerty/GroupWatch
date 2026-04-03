@@ -26,6 +26,8 @@ app.get("/extract", async (req, res) => {
     return res.status(400).json({ error: "Missing url param" });
   }
 
+  console.log("Extracting video from:", reelUrl);
+
   try {
     const response = await fetch(reelUrl, {
       headers: {
@@ -45,11 +47,13 @@ app.get("/extract", async (req, res) => {
 
     res.json({ videoUrl });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Request failed" });
   }
 });
 
-app.get("/*", (req, res) => {
+// Catch-all 404 route (works with Express 5+)
+app.get("/:anything(*)", (req, res) => {
   res.status(404).json({ error: "No route matched", path: req.path });
 });
 
