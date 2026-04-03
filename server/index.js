@@ -26,8 +26,6 @@ app.get("/extract", async (req, res) => {
     return res.status(400).json({ error: "Missing url param" });
   }
 
-  console.log("Extracting video from:", reelUrl);
-
   try {
     const response = await fetch(reelUrl, {
       headers: {
@@ -37,7 +35,12 @@ app.get("/extract", async (req, res) => {
 
     const html = await response.text();
 
-    // crude extraction (brittle)
+    // Log the raw HTML to console (first 5000 chars)
+    console.log("==== Raw HTML start ====");
+    console.log(html.slice(0, 5000));
+    console.log("==== Raw HTML end ====");
+
+    // Existing regex extraction
     const match = html.match(/"video_url":"([^"]+)"/);
     const videoUrl = match ? match[1].replace(/\\u0026/g, "&") : null;
 
@@ -50,11 +53,6 @@ app.get("/extract", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Request failed" });
   }
-});
-
-// Catch-all 404 route (works with Express 5+)
-app.get("/:anything(*)", (req, res) => {
-  res.status(404).json({ error: "No route matched", path: req.path });
 });
 
 // Start server
