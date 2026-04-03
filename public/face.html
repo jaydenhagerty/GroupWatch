@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>High-Speed Smile Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <style>
+        body { margin: 0; background: #121212; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; }
+        .canvas-container { position: relative; margin: 20px; border: 2px solid #00ffcc; border-radius: 12px; overflow: hidden; box-shadow: 0 0 20px rgba(0, 255, 204, 0.2); }
+        canvas { position: absolute; top: 0; left: 0; }
+        table { width: 80%; border-collapse: collapse; margin-top: 20px; background: #1e1e1e; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; border-bottom: 1px solid #333; text-align: center; }
+        th { background: #252525; color: #00ffcc; text-transform: uppercase; letter-spacing: 1px; }
+        #status { color: #00ffcc; font-weight: bold; margin-top: 15px; padding: 10px; border-radius: 5px; background: rgba(0, 255, 204, 0.1); }
+        .smile-bar-bg { background: #333; width: 100px; height: 10px; border-radius: 5px; display: inline-block; margin-left: 10px; }
+        .smile-bar-fill { background: #00ffcc; height: 100%; border-radius: 5px; transition: width 0.1s ease; }
+    </style>
+</head>
+<body>
+
+    <div id="status">Initializing Performance Mode...</div>
+
+    <div class="canvas-container">
+        <video id="video" width="640" height="480" autoplay muted></video>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Person ID</th>
+                <th>Total Smiles</th>
+                <th>Smile Intensity</th>
+            </tr>
+        </thead>
+        <tbody id="stats-body"></tbody>
+    </table>
+
+    <audio id="smileSound" src="sounds/vine boom.mp3" preload="auto"></audio>
+<script>
+const smileCooldown = 2000;
+const flashCooldown = 1000;
+
+const video = document.getElementById('video');
+const status = document.getElementById('status');
+const statsBody = document.getElementById('stats-body');
+
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+
+let faceData = {};
+let labeledDescriptors = [];
+const rowMap = {};
+let customNames = JSON.parse(localStorage.getItem('faceNames') || '{}');
+
+function getDisplayName(id) {
+    return customNames[id] || id;
+}
+
+function setDisplayName(id, name) {
+    if (!name.trim()) delete customNames[id];
+    else customNames[id] = name.trim();
+    localStorage.setItem('faceNames', JSON.stringify(customNames));
+}
+
+// Initialize AI and Camera
+async function setup() {
+    try {
+        status.innerText = "⚡ Loading Speed-Optimized Models...";
+        // Load TinyFaceDetector instead of SsdMobilenet for higher FPS
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+        video.srcObject = stream;
+        status.innerText = "System Ready: Tracking Active";
+    } catch (err) {
+        status.innerText = "Critical Error: " + err.message;
+    }
+}
+
+let audioUnlocked = false;
+const smileSound = document.getElementById('smileSound');
+
+function unlockAudio() {
+    if (audioUnlocked) return;
+    smileSound.volume = 0; // silent prime
+    smileSound.play().then(() => {
+        smileSound.pause();
+        smileSound.currentTime = 0;
+        smileSound.volume = 1;
+        audioUnlocked = true;
+        status.innerText = "System Ready: Tracking Active 🔊";
+    }).catch(()=>{});
+}
+
+document.addEventListener('click', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+video.addEventListener('play', () => {
+    const canvas = faceapi.createCanvasFromMedia(video);
+    document.querySelector('.canvas-container').append(canvas);
+    const displaySize = { width: video.width, height: video.height };
+    faceapi.matchDimensions(canvas, displaySize);
+
+    // Use requestAnimationFrame for smoother performance
+    async function detectionLoop() {
+        const detections = await faceapi.detectAllFaces(video, 
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptors();
+
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        
+        const frameIds = processFrame(detections);
+        
+        // Optional: comment these out for a cleaner look
+        resizedDetections.forEach((det, i) => {
+            const id = frameIds[i];
+            if (!id) return;
+            const box = det.detection.box;
+            const isFlashRed = faceData[id] && performance.now() < (faceData[id].flashUntil || 0);
+            const drawBox = new faceapi.draw.DrawBox(box, {
+                label: getDisplayName(id),
+                boxColor: isFlashRed ? '#ff0000' : '#0000ff',
+                lineWidth: 2,
+            });
+            drawBox.draw(canvas);
+        });
+        
+        if (!window.lastUI || performance.now() - window.lastUI > 100) {
+            updateUI();
+            window.lastUI = performance.now();
+        }
+        requestAnimationFrame(detectionLoop);
+    }
+    
+    detectionLoop();
+});
+
+function processFrame(detections) {
+    const frameIds = [];
+
+    detections.forEach(det => {
+        let bestMatch = { label: 'unknown', distance: 1.0 };
+        const THRESHOLD = 0.7; // Relaxed from 0.55/0.6 to allow for head tilts
+
+        // 1. Search through all known people and ALL their saved descriptors
+        labeledDescriptors.forEach(ld => {
+            ld.descriptors.forEach(savedDescriptor => {
+                const dist = faceapi.euclideanDistance(det.descriptor, savedDescriptor);
+                if (dist < THRESHOLD && dist < bestMatch.distance) {
+                    bestMatch = { label: ld.label, distance: dist };
+                }
+            });
+        });
+
+        let id = bestMatch.label;
+
+        if (id === 'unknown') {
+            // NEW PERSON: Create a new entry
+            id = `User_${labeledDescriptors.length + 1}`;
+            labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(id, [det.descriptor]));
+            faceData[id] = {
+                totalSmiles: 0,
+                currentSmilePct: 0,
+                wasSmiling: false,
+                lastSmileTime: 0,
+                flashUntil: 0
+            };
+        } else {
+            // EXISTING PERSON: "Learning" Mode
+            // If the match is good (e.g., 0.45 to 0.7) but not perfect, 
+            // add this new angle to their "memory" (limit to 10 snapshots to save memory)
+            const targetPerson = labeledDescriptors.find(ld => ld.label === id);
+            if (bestMatch.distance > 0.45 && targetPerson.descriptors.length < 10) {
+                targetPerson.descriptors.push(det.descriptor);
+            }
+        }
+
+        // --- Smile Logic remains the same ---
+        const happyValue = det.expressions.happy;
+        faceData[id].currentSmilePct = (happyValue * 100).toFixed(1);
+
+        const isSmilingNow = happyValue > 0.85;
+        const now = performance.now();
+
+        // count once per second WHILE smiling
+        if (isSmilingNow && now - faceData[id].lastSmileTime >= smileCooldown) {
+            faceData[id].totalSmiles++;
+            faceData[id].lastSmileTime = now;
+            faceData[id].flashUntil = now + flashCooldown;
+
+            if (audioUnlocked) {
+                smileSound.currentTime = 0;
+                smileSound.play().catch(()=>{});
+            }
+        }
+
+        faceData[id].wasSmiling = isSmilingNow;
+        frameIds.push(id);
+    });
+
+    return frameIds;
+}
+
+function updateUI() {
+    for (const [id, data] of Object.entries(faceData)) {
+
+        // create row once
+        if (!rowMap[id]) {
+            const tr = document.createElement('tr');
+
+            tr.innerHTML = `
+                <td>
+                    <input 
+                        value="${getDisplayName(id)}"
+                        data-id="${id}"
+                        class="name-input"
+                        style="background:#111;color:#00ffcc;border:1px solid #333;border-radius:6px;padding:6px;text-align:center;width:120px"
+                    />
+                </td>
+                <td class="smile-count"><strong>0</strong></td>
+                <td>
+                    <span class="smile-pct">0</span>%
+                    <div class="smile-bar-bg">
+                        <div class="smile-bar-fill"></div>
+                    </div>
+                </td>
+            `;
+
+            // name editing
+            tr.querySelector('.name-input').addEventListener('input', e => {
+                setDisplayName(id, e.target.value);
+            });
+
+            statsBody.appendChild(tr);
+            rowMap[id] = tr;
+        }
+
+        // update values only (no DOM replacement)
+        const row = rowMap[id];
+        row.querySelector('.smile-count strong').textContent = data.totalSmiles;
+        row.querySelector('.smile-pct').textContent = data.currentSmilePct;
+        row.querySelector('.smile-bar-fill').style.width = data.currentSmilePct + '%';
+    }
+}
+
+setup();
+
+statsBody.addEventListener('input', e => {
+    if (!e.target.classList.contains('name-input')) return;
+    const id = e.target.dataset.id;
+    setDisplayName(id, e.target.value);
+});
+</script>
+</body>
+</html>

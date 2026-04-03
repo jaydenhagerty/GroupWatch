@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GroupWatch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div onclick="location.reload()" class="backBtn">
+        <p>&#8249;</p>
+    </div>
+
+
+    <div class="welcome" id="welcome">
+        <div class="welcomeMenu animate-bottom">
+            <h1>GroupWatch</h1>
+            <p>React to video clips with your friends!</p>
+            <br>
+            <a onclick="document.getElementById('welcome').style.display = 'none'; document.getElementById('fileGenerator').style.display = 'grid';">Create</a> <a onclick="document.getElementById('welcome').style.display = 'none'">Watch</a>
+        </div>
+    </div>
+
+
+    <div class="fileGenerator" id="fileGenerator" style="display: none;">
+        <div class="fileGeneratorMenu">
+            <div>
+                <div id="preview" class="preview"></div>
+            </div>
+            <ul class="navbar2">
+                <li class="navbarChild"><input id="previewLinkInput" placeholder="Paste YouTube link..."></li>
+                <li class="navbarChild"><span>Start: </span></li>
+                <li class="navbarChild"><input oncontextmenu="this.value = getPreviewTime();return false;" id="startValueInput" class="input-number"></li>
+                <li class="navbarChild"><span>End: </span></li>
+                <li class="navbarChild"><input oncontextmenu="this.value = getPreviewTime();return false;" id="endValueInput" class="input-number"></li>
+                <li class="navbarChild"><a onclick="previewVideo()">Preview</a></li>
+                <li class="navbarChild"><a onclick="addToJsonFile()">Add!</a></li>
+            </ul>  
+        </div>
+        <div class="bottomSection">
+            <button id="exportButton" onclick="showPlaylistOverview()" disabled>Export Playlist</button>
+        </div>
+    </div>
+
+    <div class="playlistOverview" id="playlistOverview" style="display: none;">
+        <div class="playlistOverviewMenu animate-bottom">
+            <h2>Playlist Overview</h2>
+            <p id="overviewCount">0 clips</p>
+            <ul id="overviewList" class="overviewList"></ul>
+            <div class="overviewActions">
+                <button onclick="hidePlaylistOverview()">Back</button>
+                <button id="confirmExportButton" onclick="finishJsonFile()" disabled>Export Playlist</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="playerHolder" style="display: none;">
+        <div style="width:100%; position: absolute; left: 0; top: 0;" id="player" class="player"></div>
+    </div>
+    
+    <div class="bottom" id="bottom">
+        <ul class="navbar">
+            <li class="navbarChild">
+                <div id="nextVideoButton" class="loadButton disabled" onclick="go()">
+                    <span style="z-index: 2;" id="nextVideoButtonText">Start</span>
+                    <div class="progressBar" id="startProgress"></div>
+                </div>
+            </li>
+            <li class="navbarChild"><button id="editQueueButton" onclick="upload.click()">Add to Queue</button></li>
+            <li class="navbarChild"><span id="videosQueued" style="color: white"></span></li>
+        </ul>
+        
+    </div>
+
+    <div id="videoMenu" class="videoMenu">
+        <!--<input id="videoInput" placeholder="Paste a YouTube link..." style="width: 100%;">-->
+        <input id="upload" type="file" style="width: 100%;" accept=".json,.groupwatch">
+        <a onclick="document.getElementById('videoMenu').style.right = '-40%';" style="color: white;">Close</a>
+        <ul id="videoList" class="videoList"></ul>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
