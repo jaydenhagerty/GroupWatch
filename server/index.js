@@ -49,11 +49,11 @@ app.get("/extract", async (req, res) => {
   }
 });
 
+app.get("/*", (req, res) => {
+  res.status(404).json({ error: "No route matched", path: req.path });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`GroupWatch backend running on port ${PORT}`);
-});
-
-app.get("*", (req, res) => {
-  res.status(404).json({ error: "No route matched", path: req.path });
 });
