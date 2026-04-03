@@ -1,25 +1,4 @@
 const express = require("express");
-// const fetch = require("node-fetch");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ ok: true });
-});
-
-// Root endpoint
-app.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    service: "groupwatch-backend",
-    message: "Server is running",
-  });
-});
-
-// Extract video endpoint
-const express = require("express");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,11 +63,6 @@ app.get("/extract", async (req, res) => {
     console.error("Fetch error:", err);
     res.status(500).json({ error: "Request failed" });
   }
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`GroupWatch backend running on port ${PORT}`);
 });
 
 // Start server
